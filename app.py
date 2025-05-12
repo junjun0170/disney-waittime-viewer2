@@ -6,7 +6,7 @@ import matplotlib
 import datetime
 import re
 
-matplotlib.rcParams['font.family'] = 'IPAexGothic'  # 日本語フォント対策
+matplotlib.rcParams['font.family'] = ['IPAexGothic', 'Noto Sans CJK JP', 'sans-serif']  # 日本語フォント対策
 
 # --- ページ設定 ---
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
@@ -36,7 +36,7 @@ df['傾向'] = df.groupby('表示名', group_keys=False).apply(judge_recent_decr
 st.write("✅ データ処理完了")
 
 # --- UI ---
-st.title("🎢 待ち時間モニター")
+st.title("🎢 TDS待ち時間")
 
 selected_date = st.date_input("日付選択", value=datetime.date.today())
 trend_filter = st.selectbox("傾向", ["全て", "減少"])
@@ -75,8 +75,8 @@ if st.button("📈 グラフを表示"):
             color = 'gray'
 
         st.markdown(
-            f"<small>{title}<br>全体平均：{avg_total:.1f}分　/　直近1時間平均：{avg_recent:.1f}分</small><br>"
-            f"<span style='color:{color}'><small>補足：{latest_info}</small></span>",
+            f"<div style='font-size:13px'>{title}<br>全体平均：{avg_total:.1f}分　/　直近1時間平均：{avg_recent:.1f}分</div><br>"
+            f"<span style='color:{color}'><div style='font-size:13px'>補足：{latest_info}</div></span>",
             unsafe_allow_html=True
         )
     st.subheader("📈 待ち時間グラフ")
