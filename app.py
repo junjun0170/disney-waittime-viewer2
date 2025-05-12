@@ -6,7 +6,7 @@ import matplotlib
 import datetime
 import re
 
-matplotlib.rcParams['font.family'] = 'Meiryo'  # 日本語フォント対策
+matplotlib.rcParams['font.family'] = 'IPAexGothic'  # 日本語フォント対策
 
 # --- ページ設定 ---
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
@@ -75,8 +75,8 @@ if st.button("📈 グラフを表示"):
             color = 'gray'
 
         st.markdown(
-            f"{title}<br>全体平均：{avg_total:.1f}分　/　直近1時間平均：{avg_recent:.1f}分<br>"
-            f"<span style='color:{color}'>補足：{latest_info}</span>",
+            f"<small>{title}<br>全体平均：{avg_total:.1f}分　/　直近1時間平均：{avg_recent:.1f}分</small><br>"
+            f"<span style='color:{color}'><small>補足：{latest_info}</small></span>",
             unsafe_allow_html=True
         )
     st.subheader("📈 待ち時間グラフ")
