@@ -5,16 +5,21 @@ import matplotlib.dates as mdates
 import matplotlib
 import datetime
 import re
-
+from urllib.parse import quote
 matplotlib.rcParams['font.family'] = 'Noto Sans CJK JP'
 
 # --- ページ設定 ---
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
 
+# TOPリンク（現在のパスのみ取得）
+st.markdown(
+    "<a href='/' target='_self' style='font-size:10px; font-weight:bold;'>TOP</a>",
+    unsafe_allow_html=True
+)
+
 # --- データ読み込み ---
 file_id = "1-Yaxjs124GbN3Q1j-AszzUpWYGMQ3xmw"
 gsheet_url = f"https://drive.google.com/uc?id={file_id}"
-#df = pd.read_csv(gsheet_url)
 df = pd.read_csv(gsheet_url)
 df.columns = df.columns.str.strip()
 df['待ち時間'] = pd.to_numeric(df['待ち時間'], errors='coerce').fillna(0)
@@ -22,7 +27,7 @@ df['取得時刻'] = pd.to_datetime(df['取得時刻'], errors='coerce')
 df['時刻'] = df['取得時刻'].dt.time
 df['表示名'] = df['名称'] + "（" + df['エリア'] + "）"
 
-# --- 傾向分類（直近1時間で減少） ---
+# --- 傾向分類 ---
 def judge_recent_decrease(group):
     one_hour_ago = group['取得時刻'].max() - pd.Timedelta(hours=1)
     recent = group[group['取得時刻'] >= one_hour_ago].sort_values('取得時刻')
@@ -37,65 +42,79 @@ df['傾向'] = df.groupby('表示名', group_keys=False).apply(judge_recent_decr
 
 # --- UI ---
 st.write("### 🎢 TDS待ち時間")
-
-# 日付選択（カレンダー付き）
 selected_date = st.date_input("日付を選択", value=datetime.date.today())
+query = st.query_params
+query = st.query_params
+preselected = query.get("selected", "---")
 
-# 対象日のデータ取得
+# クエリに変化があったら再実行して画面を更新
+if "selected" in query and st.session_state.get("last_selected") != query["selected"]:
+    st.session_state["last_selected"] = query["selected"]
+    st.rerun()
+
+# --- アコーディオン表示準備 ---
 day_df = df[df['取得時刻'].dt.date == selected_date]
-
-# 最新の時刻ごとにソート
 latest_df = day_df.sort_values("取得時刻").groupby('表示名').tail(1)
 
-# 📉 待ち時間減少中
+# 📉 減少中
 decreasing_df = []
 for name, group in day_df.groupby("表示名"):
     group = group.sort_values("取得時刻")
     recent = group[group["取得時刻"] >= group["取得時刻"].max() - pd.Timedelta(hours=1)]
-    if len(recent) >= 2:
-        if recent["待ち時間"].mean() < recent["待ち時間"].iloc[0]:
-            latest_time = group.iloc[-1]["待ち時間"]
-            decreasing_df.append(f"{name}（{int(latest_time)}分）")
+    if len(recent) >= 2 and recent["待ち時間"].mean() < recent["待ち時間"].iloc[0]:
+        latest_time = group.iloc[-1]["待ち時間"]
+        decreasing_df.append((name, int(latest_time)))
 
 if decreasing_df:
     with st.expander("📉 待ち時間減少中"):
-        for line in decreasing_df:
-            st.markdown(f"<div style='font-size:11px'>{line}</div>", unsafe_allow_html=True)
+        for name, time in decreasing_df:
+            true_name = name.split("（")[0]  # 表示名から名称を抽出
+            encoded = quote(true_name)
+            st.markdown(
+                f"<a href='?selected={encoded}' target='_self' style='font-size:11px'>{name}（{time}分）</a>",
+                unsafe_allow_html=True
+            )
 
-# ⚠ システム調整中
+
+
+# ⚠ 一時運営中止
 paused_df = latest_df[latest_df["運営状況"] == "一時運営中止"]
 if not paused_df.empty:
     with st.expander("⚠ システム調整中"):
         for _, row in paused_df.iterrows():
-            st.markdown(f"<div style='font-size:11px'>{row['表示名']}（{int(row['待ち時間'])}分）</div>", unsafe_allow_html=True)
+            encoded = quote(row['名称'])
+            st.markdown(
+                f"<a href='?selected={encoded}' target='_self' style='font-size:11px'>{row['表示名']}（{int(row['待ち時間'])}分）</a>",
+                unsafe_allow_html=True
+            )
 
-# 🟥 補足情報に「中」
+# 🟥 補足「中」
 suspicious_df = latest_df[latest_df["補足情報"].astype(str).str.contains("中", na=False)]
 if not suspicious_df.empty:
     with st.expander("🟥 DPA販売中"):
         for _, row in suspicious_df.iterrows():
-            st.markdown(f"<div style='font-size:11px'>{row['表示名']}（{int(row['待ち時間'])}分）</div>", unsafe_allow_html=True)
+            encoded = quote(row['名称'])
+            st.markdown(
+                f"<a href='?selected={encoded}' target='_self' style='font-size:11px'>{row['表示名']}（{int(row['待ち時間'])}分）</a>",
+                unsafe_allow_html=True
+            )
 
-# 選択された日付に基づくアトラクション一覧
+# プルダウン
 name_day = df[df['取得時刻'].dt.date == selected_date]
 avg_map = name_day.groupby('名称')['待ち時間'].mean().sort_values(ascending=False)
 name_options = ["---"] + avg_map.index.tolist()
-name_filter = st.selectbox("アトラクション", name_options, index=0)
+name_filter = st.selectbox("アトラクション", name_options, index=name_options.index(preselected) if preselected in name_options else 0)
 
-# --- フィルタ処理 ---
+# --- フィルタ ---
 if name_filter != "---":
-    filtered = df[df['取得時刻'].dt.date == selected_date]
-    filtered = filtered[filtered['名称'] == name_filter]
+    filtered = df[(df['取得時刻'].dt.date == selected_date) & (df['名称'] == name_filter)]
 else:
     filtered = pd.DataFrame()
 
 # --- グラフ＆表の表示 ---
 if not filtered.empty:
     st.write("### 📈 待ち時間グラフ")
-
     fig, ax = plt.subplots(figsize=(6, 3))
-    legend_texts = []
-    legend_colors = []
 
     def extract_time_from_text(text):
         match = re.search(r'(\d{1,2}:\d{2})', str(text))
@@ -106,8 +125,8 @@ if not filtered.empty:
         recent_group = group[group['取得時刻'] >= group['取得時刻'].max() - pd.Timedelta(hours=1)]
         avg_recent = recent_group['待ち時間'].mean() if not recent_group.empty else 0
         group_sorted = group.sort_values('取得時刻')
-
         latest_row = group_sorted.iloc[-1]
+
         latest_info_raw = latest_row.get('補足情報', '')
         latest_info = '' if pd.isna(latest_info_raw) else str(latest_info_raw)
         営業時間 = str(latest_row.get('営業時間', ''))
@@ -131,17 +150,13 @@ if not filtered.empty:
             unsafe_allow_html=True
         )
 
-        label_text = title
-        ax.plot(group_sorted['取得時刻'], group_sorted['待ち時間'], marker='o', label=label_text)
-        legend_texts.append(label_text)
-        legend_colors.append(color)
+        ax.plot(group_sorted['取得時刻'], group_sorted['待ち時間'], marker=None, label=title)
 
-    legend = ax.legend(loc="upper left", fontsize=8)
-    for text, color in zip(legend.get_texts(), legend_colors):
-        text.set_color(color)
-
-    ax.set_xlabel("取得時刻")
-    ax.set_ylabel("待ち時間（分）")
+    legend = ax.legend()
+    if legend:
+        legend.remove()
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Wait Time")
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     fig.autofmt_xdate()
