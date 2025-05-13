@@ -6,15 +6,15 @@ import matplotlib
 import datetime
 import re
 
-# 本番対応フォント（文字化け防止）
 matplotlib.rcParams['font.family'] = 'Noto Sans CJK JP'
 
 # --- ページ設定 ---
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
 
 # --- データ読み込み ---
-file_id = "12RIUjsM110hw6tMpa_vitk2WCH1pdwZQ"
+file_id = "1-Yaxjs124GbN3Q1j-AszzUpWYGMQ3xmw"
 gsheet_url = f"https://drive.google.com/uc?id={file_id}"
+#df = pd.read_csv(gsheet_url)
 df = pd.read_csv(gsheet_url)
 df.columns = df.columns.str.strip()
 df['待ち時間'] = pd.to_numeric(df['待ち時間'], errors='coerce').fillna(0)
@@ -38,20 +38,53 @@ df['傾向'] = df.groupby('表示名', group_keys=False).apply(judge_recent_decr
 # --- UI ---
 st.write("### 🎢 TDS待ち時間")
 
-trend_filter = st.selectbox("傾向", ["全て", "減少"], index=0)
-name_day = df[df['取得時刻'].dt.date == datetime.date.today()]
-if trend_filter != "全て":
-    name_day = name_day[name_day['傾向'] == trend_filter]
+# 日付選択（カレンダー付き）
+selected_date = st.date_input("日付を選択", value=datetime.date.today())
 
+# 対象日のデータ取得
+day_df = df[df['取得時刻'].dt.date == selected_date]
+
+# 最新の時刻ごとにソート
+latest_df = day_df.sort_values("取得時刻").groupby('表示名').tail(1)
+
+# 📉 待ち時間減少中
+decreasing_df = []
+for name, group in day_df.groupby("表示名"):
+    group = group.sort_values("取得時刻")
+    recent = group[group["取得時刻"] >= group["取得時刻"].max() - pd.Timedelta(hours=1)]
+    if len(recent) >= 2:
+        if recent["待ち時間"].mean() < recent["待ち時間"].iloc[0]:
+            latest_time = group.iloc[-1]["待ち時間"]
+            decreasing_df.append(f"{name}（{int(latest_time)}分）")
+
+if decreasing_df:
+    with st.expander("📉 待ち時間減少中"):
+        for line in decreasing_df:
+            st.markdown(f"<div style='font-size:11px'>{line}</div>", unsafe_allow_html=True)
+
+# ⚠ システム調整中
+paused_df = latest_df[latest_df["運営状況"] == "一時運営中止"]
+if not paused_df.empty:
+    with st.expander("⚠ システム調整中"):
+        for _, row in paused_df.iterrows():
+            st.markdown(f"<div style='font-size:11px'>{row['表示名']}（{int(row['待ち時間'])}分）</div>", unsafe_allow_html=True)
+
+# 🟥 補足情報に「中」
+suspicious_df = latest_df[latest_df["補足情報"].astype(str).str.contains("中", na=False)]
+if not suspicious_df.empty:
+    with st.expander("🟥 DPA販売中"):
+        for _, row in suspicious_df.iterrows():
+            st.markdown(f"<div style='font-size:11px'>{row['表示名']}（{int(row['待ち時間'])}分）</div>", unsafe_allow_html=True)
+
+# 選択された日付に基づくアトラクション一覧
+name_day = df[df['取得時刻'].dt.date == selected_date]
 avg_map = name_day.groupby('名称')['待ち時間'].mean().sort_values(ascending=False)
 name_options = ["---"] + avg_map.index.tolist()
 name_filter = st.selectbox("アトラクション", name_options, index=0)
 
 # --- フィルタ処理 ---
 if name_filter != "---":
-    filtered = df[df['取得時刻'].dt.date == datetime.date.today()]
-    if trend_filter != "全て":
-        filtered = filtered[filtered['傾向'] == trend_filter]
+    filtered = df[df['取得時刻'].dt.date == selected_date]
     filtered = filtered[filtered['名称'] == name_filter]
 else:
     filtered = pd.DataFrame()
