@@ -11,6 +11,23 @@ matplotlib.rcParams['font.family'] = 'Noto Sans CJK JP'
 # --- ページ設定 ---
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
 
+# スマホ向け selectbox の表示最適化
+st.markdown("""
+    <style>
+    div[data-baseweb="select"] {
+        font-size: 13px !important;
+    }
+    label {
+        font-size: 13px !important;
+    }
+    .stSelectbox div[role="combobox"] {
+        min-height: 28px !important;
+        height: 28px !important;
+        font-size: 13px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # TOPリンク（現在のパスのみ取得）
 st.markdown(
     "<a href='/' target='_self' style='font-size:10px; font-weight:bold;'>TOP</a>",
