@@ -5,9 +5,9 @@ import matplotlib.dates as mdates
 import matplotlib
 import datetime
 import re
-import japanize_matplotlib
 
-matplotlib.rcParams['font.family'] = ['IPAexGothic', 'Noto Sans CJK JP', 'sans-serif']
+# 本番対応フォント（文字化け防止）
+matplotlib.rcParams['font.family'] = 'Noto Sans CJK JP'
 
 # --- ページ設定 ---
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
@@ -22,7 +22,7 @@ df['取得時刻'] = pd.to_datetime(df['取得時刻'], errors='coerce')
 df['時刻'] = df['取得時刻'].dt.time
 df['表示名'] = df['名称'] + "（" + df['エリア'] + "）"
 
-# --- 傾向分類 ---
+# --- 傾向分類（直近1時間で減少） ---
 def judge_recent_decrease(group):
     one_hour_ago = group['取得時刻'].max() - pd.Timedelta(hours=1)
     recent = group[group['取得時刻'] >= one_hour_ago].sort_values('取得時刻')
@@ -38,7 +38,6 @@ df['傾向'] = df.groupby('表示名', group_keys=False).apply(judge_recent_decr
 # --- UI ---
 st.write("### 🎢 TDS待ち時間")
 
-# プルダウン
 trend_filter = st.selectbox("傾向", ["全て", "減少"], index=0)
 name_day = df[df['取得時刻'].dt.date == datetime.date.today()]
 if trend_filter != "全て":
@@ -116,7 +115,6 @@ if not filtered.empty:
     fig.tight_layout()
     st.pyplot(fig)
 
-    # 表の表示
     st.write("### 📋 待ち時間データ")
     two_hours_ago = filtered['取得時刻'].max() - pd.Timedelta(hours=2)
     recent_filtered = filtered[filtered['取得時刻'] >= two_hours_ago].sort_values('取得時刻', ascending=False)
