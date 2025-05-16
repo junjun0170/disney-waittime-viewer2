@@ -18,7 +18,7 @@ st.set_page_config(page_title="待ち時間グラフ", layout="centered")
 # --- タブ構成 ---
 tab1, tab2 = st.tabs(["🎢 TDS", "🏰 TDL"])
 
-with tab2:
+with tab1:
     # TOPリンク（現在のパスのみ取得）
     st.markdown(
         "<a href='/' target='_self' style='font-size:10px; font-weight:bold;'>TOP</a>",
