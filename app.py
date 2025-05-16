@@ -18,7 +18,7 @@ st.set_page_config(page_title="待ち時間グラフ", layout="centered")
 # --- タブ構成 ---
 tab1, tab2 = st.tabs(["🎢 TDS", "🏰 TDL"])
 
-with tab1:
+with tab2:
     # TOPリンク（現在のパスのみ取得）
     st.markdown(
         "<a href='/' target='_self' style='font-size:10px; font-weight:bold;'>TOP</a>",
@@ -178,17 +178,35 @@ with tab1:
             recent_group = group_filled[group_filled['取得時刻'] >= group_filled['取得時刻'].max() - pd.Timedelta(hours=1)]
             avg_recent = recent_group['待ち時間'].mean() if not recent_group.empty else 0
 
-            # 最新データ
-            latest_row = group_filled.iloc[-1]
-            latest_info = '' if pd.isna(latest_row.get('補足情報', '')) else str(latest_row['補足情報'])
-            営業時間 = str(latest_row.get('営業時間', ''))
-            更新時刻 = str(latest_row.get('更新時刻', ''))
+            def extract_time_from_text(text):
+                match = re.search(r'(\d{1,2}:\d{2})', str(text))
+                return match.group(1) if match else "00:00"
 
+            # 最新の1行
+            latest_row = group_filled.iloc[-1]
+            latest_info = str(latest_row['補足情報'])
+            営業時間 = str(latest_row['営業時間'])
+            更新時刻 = str(latest_row['更新時刻'])
+
+            # 補足カラー
             color = 'black'
             if '中' in latest_info:
                 color = 'red'
-            elif 'なし' in latest_info:
+            elif '販売なし' in latest_info:
                 color = 'gray'
+
+                # 「販売中 → 販売なし」の切り替えを検出して終了時刻を追記
+                sorted_info = group_filled[['補足情報', '更新時刻']].astype(str).reset_index(drop=True)
+                for i in range(len(sorted_info) - 1):
+                    before = sorted_info.loc[i, '補足情報']
+                    after = sorted_info.loc[i + 1, '補足情報']
+                    if '販売中' in before and '販売なし' in after:
+                        match = re.search(r'(\d{1,2}:\d{2})', sorted_info.loc[i + 1, '更新時刻'])
+                        if match:
+                            latest_info += f"（終了時刻{match.group(1)}）"
+                        break
+
+
 
             st.markdown(
                 f"<div style='font-size:13px'>{title}<br>営業時間：{営業時間}<br>{更新時刻}<br><br>"
@@ -387,17 +405,35 @@ with tab2:
             recent_group = group_filled[group_filled['取得時刻'] >= group_filled['取得時刻'].max() - pd.Timedelta(hours=1)]
             avg_recent = recent_group['待ち時間'].mean() if not recent_group.empty else 0
 
-            # 最新データ
-            latest_row = group_filled.iloc[-1]
-            latest_info = '' if pd.isna(latest_row.get('補足情報', '')) else str(latest_row['補足情報'])
-            営業時間 = str(latest_row.get('営業時間', ''))
-            更新時刻 = str(latest_row.get('更新時刻', ''))
+            def extract_time_from_text(text):
+                match = re.search(r'(\d{1,2}:\d{2})', str(text))
+                return match.group(1) if match else "00:00"
 
+            # 最新の1行
+            latest_row = group_filled.iloc[-1]
+            latest_info = str(latest_row['補足情報'])
+            営業時間 = str(latest_row['営業時間'])
+            更新時刻 = str(latest_row['更新時刻'])
+
+            # 補足カラー
             color = 'black'
             if '中' in latest_info:
                 color = 'red'
-            elif 'なし' in latest_info:
+            elif '販売なし' in latest_info:
                 color = 'gray'
+
+                # 「販売中 → 販売なし」の切り替えを検出して終了時刻を追記
+                sorted_info = group_filled[['補足情報', '更新時刻']].astype(str).reset_index(drop=True)
+                for i in range(len(sorted_info) - 1):
+                    before = sorted_info.loc[i, '補足情報']
+                    after = sorted_info.loc[i + 1, '補足情報']
+                    if '販売中' in before and '販売なし' in after:
+                        match = re.search(r'(\d{1,2}:\d{2})', sorted_info.loc[i + 1, '更新時刻'])
+                        if match:
+                            latest_info += f"（終了時刻{match.group(1)}）"
+                        break
+
+
 
             st.markdown(
                 f"<div style='font-size:13px'>{title}<br>営業時間：{営業時間}<br>{更新時刻}<br><br>"
