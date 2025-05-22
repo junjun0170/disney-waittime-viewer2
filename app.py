@@ -102,13 +102,14 @@ def draw_wait_time_chart(log_df, facility_id):
         st.info("グラフ表示用のデータがありません。")
         return
     df = df.sort_values("fetched_at")
-
-    # 補間処理（5分単位で線形補完）
     df = df.set_index("fetched_at").resample("5min").ffill().reset_index()
 
     start_time = datetime.combine(date.today(), datetime.strptime("08:30", "%H:%M").time())
     end_time = datetime.combine(date.today(), datetime.strptime("21:30", "%H:%M").time())
     df = df[(df["fetched_at"] >= start_time) & (df["fetched_at"] <= end_time)]
+
+    max_val_raw = df["standbytime"].max()
+    max_val = int(max_val_raw) if pd.notnull(max_val_raw) else 60
 
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(df["fetched_at"], df["standbytime"], linestyle="-")
@@ -116,7 +117,6 @@ def draw_wait_time_chart(log_df, facility_id):
     ax.set_xlim(start_time, end_time)
     ax.set_xlabel("時刻")
     ax.set_ylabel("待ち時間（分）")
-    max_val = int(df["standbytime"].max()) if not df.empty else 60
     step = max(5, round(max_val / 10 / 5) * 5)
     ax.set_yticks(np.arange(0, max_val + step, step))
     ax.grid(True)
@@ -182,6 +182,12 @@ df_tds = merge_with_shortname(df_tds, shortname_df)
 df_tdl = merge_with_shortname(df_tdl, shortname_df)
 df_tds = pd.merge(df_tds, status_tds, on="facilityid", how="left")
 df_tdl = pd.merge(df_tdl, status_tdl, on="facilityid", how="left")
+
+# fetched_at 補完（結合後に NaT になるケース対策）
+if 'fetched_at_x' in df_tds.columns and 'fetched_at_y' in df_tds.columns:
+    df_tds["fetched_at"] = df_tds["fetched_at_x"].combine_first(df_tds["fetched_at_y"])
+if 'fetched_at_x' in df_tdl.columns and 'fetched_at_y' in df_tdl.columns:
+    df_tdl["fetched_at"] = df_tdl["fetched_at_x"].combine_first(df_tdl["fetched_at_y"])
 
 # 数値変換
 df_tds["standbytime"] = pd.to_numeric(df_tds["standbytime"], errors="coerce")
