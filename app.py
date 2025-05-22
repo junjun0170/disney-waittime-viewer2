@@ -146,16 +146,7 @@ def display_tab(df, title, key_prefix):
         facility_id = row['facilityid']
         fetched_time = row['fetched_at'].strftime('%H:%M:%S')
 
-        # ログ取得
-        raw_log = get_facility_log("tds_attraction_log" if "TDS" in title else "tdl_attraction_log", facility_id)
-        drop_rate = None
-        if raw_log:
-            _, drop_rate = generate_wait_time_graph(raw_log, today_str)
-
-        # アコーディオンタイトルに減少率表示
-        drop_rate_display = f"（{drop_rate:.1f}%減少）" if drop_rate is not None else ""
-        title_text = f"{wait}分：{name}{drop_rate_display}"
-
+        title_text = f"{wait}分：{name}"
         with st.expander(title_text, expanded=False) as exp:
             st.markdown(f"""
                 <small><b>施設名:</b> {row.get('facilitykananame', 'N/A')}<br>
@@ -164,8 +155,11 @@ def display_tab(df, title, key_prefix):
                 <b>更新:</b> {row.get('updatetime', fetched_time)}</small>
             """, unsafe_allow_html=True)
 
+            raw_log = get_facility_log("tds_attraction_log" if "TDS" in title else "tdl_attraction_log", facility_id)
             if raw_log:
-                buf, _ = generate_wait_time_graph(raw_log, today_str)
+                buf, drop_rate = generate_wait_time_graph(raw_log, today_str)
+                if drop_rate is not None:
+                    st.markdown(f"<small><b>減少率:</b> {drop_rate:.1f}%</small>", unsafe_allow_html=True)
                 st.image(buf)
             else:
                 st.info("グラフ表示用のデータがありません。")
