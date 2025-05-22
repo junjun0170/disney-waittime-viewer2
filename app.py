@@ -160,7 +160,7 @@ def display_tab(df, title, key_prefix):
 
         log_table = "tds_attraction_log" if "TDS" in title else "tdl_attraction_log"
         log_url = f"{SUPABASE_URL}/rest/v1/{log_table}"
-            log_params = {
+        log_params = {
                 "facilityid": f"eq.{facility_id}",
                 "fetched_at": f"gte.{str(date.today())}",
                 "select": "fetched_at,standbytime"
