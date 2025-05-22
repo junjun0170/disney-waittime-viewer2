@@ -28,7 +28,7 @@ def fetch_latest_data(table_name):
     df = pd.DataFrame(res.json())
     if df.empty:
         return pd.DataFrame()
-    df["fetched_at"] = pd.to_datetime(df["fetched_at"])
+    df["fetched_at"] = pd.to_datetime(df["fetched_at"], errors="coerce")
     df = df.dropna(subset=["facilityid"])
     return df.sort_values("fetched_at").groupby("facilityid", as_index=False).last()
 
@@ -55,7 +55,7 @@ def fetch_full_log_df(table_name):
     if res.status_code != 200:
         return pd.DataFrame()
     df = pd.DataFrame(res.json())
-    df["fetched_at"] = pd.to_datetime(df["fetched_at"])
+    df["fetched_at"] = pd.to_datetime(df["fetched_at"], errors="coerce")
     return df
 
 # --- 最新ステータス取得 ---
@@ -70,6 +70,7 @@ def fetch_latest_status(table_name):
     if res.status_code != 200:
         return pd.DataFrame()
     df = pd.DataFrame(res.json())
+    df["fetched_at"] = pd.to_datetime(df["fetched_at"], errors="coerce")
     df = df.sort_values("fetched_at").drop_duplicates("facilityid", keep="last")
     return df
 
@@ -103,7 +104,7 @@ def draw_wait_time_chart(log_df, facility_id):
 # --- タブUI表示 ---
 def display_tab(df, log_df, drop_rates, title):
     st.write(f"### {'\U0001F3A2' if 'TDS' in title else '\U0001F3F0'} {title}待ち時間")
-    
+
     df = df.dropna(subset=["shortname", "standbytime"])
     sort_order = st.radio("並び順を選択:", ("待順(長)", "待順(短)", "高減少率"), horizontal=True, key=title)
 
@@ -118,12 +119,14 @@ def display_tab(df, log_df, drop_rates, title):
     for _, row in df.iterrows():
         facility_id = row["facilityid"]
         drop = drop_rates.get(facility_id, 0.0)
+        fetched_at = row.get("fetched_at")
+        fetched_str = fetched_at.strftime('%H:%M:%S') if pd.notnull(fetched_at) else "N/A"
         title_text = f"{int(row['standbytime'])}分：{row['shortname']}（{drop:.1f}%減少）"
         with st.expander(title_text):
             st.markdown(f"""
                 <small><b>施設名:</b> {row.get('facilitykananame', 'N/A')}<br>
                 <b>運営状況:</b> {row.get('operatingstatus', 'N/A')}<br>
-                <b>更新:</b> {row['fetched_at'].strftime('%H:%M:%S')}</small>
+                <b>更新:</b> {fetched_str}</small>
             """, unsafe_allow_html=True)
 
             # 発券状況表示
