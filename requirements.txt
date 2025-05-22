@@ -1,5 +1,5 @@
 streamlit
 pandas
 matplotlib
-supabase-py
 numpy
+supabase-py==1.0.3
