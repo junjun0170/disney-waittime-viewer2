@@ -3,6 +3,9 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta, date
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import io
 
 # --- Secrets 読み込み ---
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -92,14 +95,37 @@ def calculate_drop_rates(log_df):
         drop_rate_map[facilityid] = round(drop, 1)
     return drop_rate_map
 
-# --- グラフ描画 ---
+# --- グラフ描画（補完ルール含む） ---
 def draw_wait_time_chart(log_df, facility_id):
     df = log_df[log_df["facilityid"] == facility_id].copy()
     if df.empty:
         st.info("グラフ表示用のデータがありません。")
         return
-    df = df.sort_values("fetched_at").set_index("fetched_at")
-    st.line_chart(df[["standbytime"]])
+    df = df.sort_values("fetched_at")
+
+    # 補間処理（5分単位で線形補完）
+    df = df.set_index("fetched_at").resample("5min").ffill().reset_index()
+
+    start_time = datetime.combine(date.today(), datetime.strptime("08:30", "%H:%M").time())
+    end_time = datetime.combine(date.today(), datetime.strptime("21:30", "%H:%M").time())
+    df = df[(df["fetched_at"] >= start_time) & (df["fetched_at"] <= end_time)]
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(df["fetched_at"], df["standbytime"], linestyle="-")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    ax.set_xlim(start_time, end_time)
+    ax.set_xlabel("時刻")
+    ax.set_ylabel("待ち時間（分）")
+    max_val = int(df["standbytime"].max()) if not df.empty else 60
+    step = max(5, round(max_val / 10 / 5) * 5)
+    ax.set_yticks(np.arange(0, max_val + step, step))
+    ax.grid(True)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png")
+    buf.seek(0)
+    st.image(buf)
 
 # --- タブUI表示 ---
 def display_tab(df, log_df, drop_rates, title):
