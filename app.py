@@ -164,9 +164,9 @@ def display_tab(df, title, key_prefix):
                 "facilityid": f"eq.{facility_id}",
                 "fetched_at": f"gte.{str(date.today())}",
                 "select": "fetched_at,standbytime"
-            }
-            log_res = requests.get(log_url, headers=HEADERS, params=log_params)
-            raw_log = log_res.json() if log_res.status_code == 200 else []
+        }
+        log_res = requests.get(log_url, headers=HEADERS, params=log_params)
+        raw_log = log_res.json() if log_res.status_code == 200 else []
 
         drop_rate_display = ""
         if raw_log:
