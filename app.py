@@ -170,12 +170,9 @@ def display_tab(df, title, key_prefix):
         raw_log = log_res.json() if log_res.status_code == 200 else []
 
         drop_rate_display = ""
-        if raw_log:
-            buf, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
-            if drop_rate is not None:
-                drop_rate_display = f" (減少率: {drop_rate:.1f}%)"
-        else:
-            buf = None
+        buf = None
+        drop_rate = None
+        drop_rate_display = ""
 
         title_text = f"{wait}分：{name}{drop_rate_display}"
         with st.expander(title_text, expanded=False):
@@ -211,10 +208,12 @@ def display_tab(df, title, key_prefix):
                     elif pp == "2":
                         st.markdown('<small><span style="color:gray">**発券状況**: プライオリティパス発券終了</span></small>', unsafe_allow_html=True)
 
-            if buf:
-                st.image(buf)
-            else:
-                st.info("グラフ表示用のデータがありません。")
+                        if st.toggle("グラフを表示", key=f"{facility_id}_toggle"):
+                if not raw_log:
+                    st.info("グラフ表示用のデータがありません。")
+                else:
+                    buf, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
+                    st.image(buf)
 
 # Streamlit UI設定
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
