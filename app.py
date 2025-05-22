@@ -217,15 +217,16 @@ with tab2:
     display_tab(df_tdl, "TDL", key_prefix="tdl")
 
 with tab3:
-    # TDS + TDL を結合し、発券中または operatingstatuscd が045のアトラクションを抽出
     df_all = pd.concat([df_tds.assign(park="TDS"), df_tdl.assign(park="TDL")], ignore_index=True)
-    df_pass = []
+    dpa_list = []
+    pp_list = []
+    linecut_list = []
 
     for _, row in df_all.iterrows():
         facility_id = row["facilityid"]
-        include = False
+        facility_name = row.get("facilitykananame", "名称不明")
 
-        # 発券中判定
+        # 発券ステータス取得
         status_url = f"{SUPABASE_URL}/rest/v1/" + ("tds_attraction_log" if row["park"] == "TDS" else "tdl_attraction_log")
         status_params = {
             "facilityid": f"eq.{facility_id}",
@@ -238,18 +239,22 @@ with tab3:
 
         if status_row:
             s = status_row[0]
-            if str(s.get("dpastatuscd")) == "1" or str(s.get("ppstatuscd")) == "1":
-                include = True
+            if str(s.get("dpastatuscd")) == "1":
+                dpa_list.append(facility_name)
+            if str(s.get("ppstatuscd")) == "1":
+                pp_list.append(facility_name)
 
-        # operatingstatuscd が 045 のものも含める
         if str(row.get("operatingstatuscd")) == "045":
-            include = True
+            linecut_list.append(facility_name)
 
-        if include:
-            df_pass.append(row)
+    def render_section(title, items):
+        st.markdown(f"### {title}")
+        if items:
+            for name in sorted(set(items)):
+                st.markdown(f"- {name}")
+        else:
+            st.markdown("なし")
 
-    df_pass = pd.DataFrame(df_pass)
-    if df_pass.empty:
-        st.info("現在、DPAまたはプライオリティパスが発券中、または運営コード045のアトラクションはありません。")
-    else:
-        display_tab(df_pass, "パス", key_prefix="pass")
+    render_section("DPA", dpa_list)
+    render_section("プライオリティパス", pp_list)
+    render_section("ラインカット", linecut_list)
