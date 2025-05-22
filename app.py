@@ -89,7 +89,7 @@ def fetch_latest_data(table_name):
         st.error(f"データ取得に失敗しました: {response.status_code}")
         return pd.DataFrame()
     data = response.json()
-    df = pd.DataFrame(response.data)
+    df = pd.DataFrame(data)
 
     if df.empty:
         return pd.DataFrame()
@@ -101,8 +101,7 @@ def fetch_latest_data(table_name):
 
 # attraction_short_nameの取得
 shortname_res = requests.get(f"{SUPABASE_URL}/rest/v1/attraction_short_name", headers=HEADERS)
-shortname_df = pd.DataFrame(shortname_res.json()).select("*").execute().data
-)
+shortname_df = pd.DataFrame(shortname_res.json())
 
 # TDS / TDL ログ取得
 df_tds = fetch_latest_data("tds_attraction_log")
@@ -133,11 +132,14 @@ def display_tab(df, title, key_prefix):
     if sort_order == "高減少率":
         drop_rate_list = []
         for _, row in df.iterrows():
-            raw_log = supabase.table("tds_attraction_log" if "TDS" in title else "tdl_attraction_log") \
-                .select("fetched_at, standbytime") \
-                .eq("facilityid", row["facilityid"]) \
-                .gte("fetched_at", str(date.today())) \
-                .execute().data
+            log_url = f"{SUPABASE_URL}/rest/v1/" + ("tds_attraction_log" if "TDS" in title else "tdl_attraction_log")
+            log_params = {
+                "facilityid": f"eq.{row['facilityid']}",
+                "fetched_at": f"gte.{str(date.today())}",
+                "select": "fetched_at,standbytime"
+            }
+            log_res = requests.get(log_url, headers=HEADERS, params=log_params)
+            raw_log = log_res.json() if log_res.status_code == 200 else []
             if raw_log:
                 _, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
                 drop_rate_list.append(drop_rate if drop_rate is not None else 0.0)
@@ -225,4 +227,3 @@ with tab1:
 
 with tab2:
     display_tab(df_tdl, "TDL", key_prefix="tdl")
-    
