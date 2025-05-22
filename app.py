@@ -146,7 +146,16 @@ def display_tab(df, title, key_prefix):
         facility_id = row['facilityid']
         fetched_time = row['fetched_at'].strftime('%H:%M:%S')
 
-        title_text = f"{wait}分：{name}"
+        # ログ取得
+        raw_log = get_facility_log("tds_attraction_log" if "TDS" in title else "tdl_attraction_log", facility_id)
+        drop_rate = None
+        if raw_log:
+            _, drop_rate = generate_wait_time_graph(raw_log, today_str)
+
+        # アコーディオンタイトルに減少率表示
+        drop_rate_display = f"（{drop_rate:.1f}%減少）" if drop_rate is not None else ""
+        title_text = f"{wait}分：{name}{drop_rate_display}"
+
         with st.expander(title_text, expanded=False) as exp:
             st.markdown(f"""
                 <small><b>施設名:</b> {row.get('facilitykananame', 'N/A')}<br>
@@ -155,11 +164,37 @@ def display_tab(df, title, key_prefix):
                 <b>更新:</b> {row.get('updatetime', fetched_time)}</small>
             """, unsafe_allow_html=True)
 
-            raw_log = get_facility_log("tds_attraction_log" if "TDS" in title else "tdl_attraction_log", facility_id)
+            # 発券状況の取得と表示
+            status_url = f"{SUPABASE_URL}/rest/v1/" + ("tds_attraction_log" if "TDS" in title else "tdl_attraction_log")
+            status_params = {
+                "facilityid": f"eq.{facility_id}",
+                "select": "dpastatuscd,ppstatuscd",
+                "order": "fetched_at.desc",
+                "limit": 1
+            }
+            status_res = requests.get(status_url, headers=HEADERS, params=status_params)
+            status_row = status_res.json() if status_res.status_code == 200 else []
+
+            if status_row:
+                status = status_row[0]
+                dpa = status.get("dpastatuscd")
+                pp = status.get("ppstatuscd")
+
+                if dpa is not None:
+                    dpa = str(dpa)
+                    if dpa == "1":
+                        st.markdown('<small><span style="color:red">**発券状況**: DPA販売中</span></small>', unsafe_allow_html=True)
+                    elif dpa == "2":
+                        st.markdown('<small><span style="color:gray">**発券状況**: DPA販売終了</span></small>', unsafe_allow_html=True)
+                elif pp is not None:
+                    pp = str(pp)
+                    if pp == "1":
+                        st.markdown('<small><span style="color:red">**発券状況**: プライオリティパス発券中</span></small>', unsafe_allow_html=True)
+                    elif pp == "2":
+                        st.markdown('<small><span style="color:gray">**発券状況**: プライオリティパス発券終了</span></small>', unsafe_allow_html=True)
+
             if raw_log:
-                buf, drop_rate = generate_wait_time_graph(raw_log, today_str)
-                if drop_rate is not None:
-                    st.markdown(f"<small><b>減少率:</b> {drop_rate:.1f}%</small>", unsafe_allow_html=True)
+                buf, _ = generate_wait_time_graph(raw_log, today_str)
                 st.image(buf)
             else:
                 st.info("グラフ表示用のデータがありません。")
