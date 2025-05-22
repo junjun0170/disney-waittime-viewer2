@@ -221,6 +221,10 @@ shortname_df = fetch_shortname()
 df_tds = merge_with_shortname(df_tds, shortname_df)
 df_tdl = merge_with_shortname(df_tdl, shortname_df)
 
+# standbytime を数値に変換（display_tab() 内の並び順対策）
+df_tds["standbytime"] = pd.to_numeric(df_tds["standbytime"], errors="coerce")
+df_tdl["standbytime"] = pd.to_numeric(df_tdl["standbytime"], errors="coerce")
+
 # UI
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
 tab1, tab2, tab3 = st.tabs(["\U0001F3A2 TDS", "\U0001F3F0 TDL", "🎫 パス"])
@@ -239,10 +243,11 @@ with tab3:
     df_all = pd.concat([df_tds.assign(park="TDS"), df_tdl.assign(park="TDL")], ignore_index=True)
     df_merged = pd.merge(df_all, df_status_all, on="facilityid", how="left")
 
-    # 型が異なると比較できないので文字列化
-    df_merged["dpastatuscd"] = df_merged["dpastatuscd"].astype(str)
-    df_merged["ppstatuscd"] = df_merged["ppstatuscd"].astype(str)
-    df_merged["operatingstatuscd"] = df_merged["operatingstatuscd"].astype(str)
+    # 存在しない列への安全な対応
+    for col in ["dpastatuscd", "ppstatuscd", "operatingstatuscd"]:
+        if col not in df_merged.columns:
+            df_merged[col] = None
+        df_merged[col] = df_merged[col].astype(str)
 
     dpa_list = df_merged[df_merged["dpastatuscd"] == "1"]["facilitykananame"].dropna().unique().tolist()
     pp_list = df_merged[df_merged["ppstatuscd"] == "1"]["facilitykananame"].dropna().unique().tolist()
