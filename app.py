@@ -120,7 +120,7 @@ def display_tab(df, title, key_prefix):
 
     sort_order = st.radio(
         "並び順を選択:",
-        ("待ち(長い順)", "待ち(短い順)", "高減少率"),
+        ("待順(長)", "待順(短)", "高減少率"),
         horizontal=True,
         key=f"{key_prefix}_sort_order"
     )
@@ -217,12 +217,15 @@ with tab2:
     display_tab(df_tdl, "TDL", key_prefix="tdl")
 
 with tab3:
-    # TDS + TDL を結合し、発券中のアトラクションのみを抽出
+    # TDS + TDL を結合し、発券中または operatingstatuscd が045のアトラクションを抽出
     df_all = pd.concat([df_tds.assign(park="TDS"), df_tdl.assign(park="TDL")], ignore_index=True)
     df_pass = []
 
     for _, row in df_all.iterrows():
         facility_id = row["facilityid"]
+        include = False
+
+        # 発券中判定
         status_url = f"{SUPABASE_URL}/rest/v1/" + ("tds_attraction_log" if row["park"] == "TDS" else "tdl_attraction_log")
         status_params = {
             "facilityid": f"eq.{facility_id}",
@@ -236,10 +239,17 @@ with tab3:
         if status_row:
             s = status_row[0]
             if str(s.get("dpastatuscd")) == "1" or str(s.get("ppstatuscd")) == "1":
-                df_pass.append(row)
+                include = True
+
+        # operatingstatuscd が 045 のものも含める
+        if str(row.get("operatingstatuscd")) == "045":
+            include = True
+
+        if include:
+            df_pass.append(row)
 
     df_pass = pd.DataFrame(df_pass)
     if df_pass.empty:
-        st.info("現在、DPAまたはプライオリティパスが発券中のアトラクションはありません。")
+        st.info("現在、DPAまたはプライオリティパスが発券中、または運営コード045のアトラクションはありません。")
     else:
         display_tab(df_pass, "パス", key_prefix="pass")
