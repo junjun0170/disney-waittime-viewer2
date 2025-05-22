@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, date
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import io
+import numpy as np
 
 # secrets.toml から読み込み
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -14,11 +15,10 @@ HEADERS = {
     "Authorization": f"Bearer {SUPABASE_KEY}"
 }
 
-
 # 今日の日付
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# グラフ生成関数 + 直近1時間の減少率を返す
+@st.cache_data(ttl=300)
 def generate_wait_time_graph(raw_data, date_str):
     df = pd.DataFrame(raw_data)
     df["fetched_at"] = pd.to_datetime(df["fetched_at"])
@@ -52,10 +52,7 @@ def generate_wait_time_graph(raw_data, date_str):
     if not df_last_hour.empty:
         start_value = df_last_hour.iloc[0]["standbytime"]
         end_value = df_last_hour.iloc[-1]["standbytime"]
-        if start_value != 0:
-            drop_rate = ((start_value - end_value) / start_value) * 100
-        else:
-            drop_rate = 0
+        drop_rate = ((start_value - end_value) / start_value) * 100 if start_value != 0 else 0
     else:
         drop_rate = None
 
@@ -65,9 +62,8 @@ def generate_wait_time_graph(raw_data, date_str):
     ax.set_xlim(start_time, end_time)
     ax.set_xlabel("time")
     ax.set_ylabel("wait time")
-    import numpy as np
     max_val = int(expanded_df["standbytime"].max())
-    step = max(5, round(max_val / 10 / 5) * 5)  # 最低5分刻み、最大値に応じて調整
+    step = max(5, round(max_val / 10 / 5) * 5)
     ax.set_yticks(np.arange(0, max_val + step, step))
     ax.grid(True)
     plt.xticks(rotation=45)
@@ -78,7 +74,7 @@ def generate_wait_time_graph(raw_data, date_str):
     buf.seek(0)
     return buf, drop_rate
 
-# データ取得関数
+@st.cache_data(ttl=300)
 def fetch_latest_data(table_name):
     url = f"{SUPABASE_URL}/rest/v1/{table_name}"
     params = {
@@ -100,52 +96,43 @@ def fetch_latest_data(table_name):
     df_latest = df.groupby("facilityid", as_index=False).last()
     return df_latest
 
-# attraction_short_nameの取得
-shortname_res = requests.get(f"{SUPABASE_URL}/rest/v1/attraction_short_name", headers=HEADERS)
-shortname_df = pd.DataFrame(shortname_res.json())
+@st.cache_data(ttl=300)
+def fetch_shortname():
+    res = requests.get(f"{SUPABASE_URL}/rest/v1/attraction_short_name", headers=HEADERS)
+    return pd.DataFrame(res.json())
 
-# TDS / TDL ログ取得
-df_tds = fetch_latest_data("tds_attraction_log")
-df_tdl = fetch_latest_data("tdl_attraction_log")
-
-def merge_with_shortname(df):
+def merge_with_shortname(df, shortname_df):
     return pd.merge(df, shortname_df, on="facilityid", how="left")
 
-df_tds = merge_with_shortname(df_tds)
-df_tdl = merge_with_shortname(df_tdl)
+@st.cache_data(ttl=300)
+def get_facility_log(table_name, facility_id):
+    url = f"{SUPABASE_URL}/rest/v1/{table_name}"
+    params = {
+        "facilityid": f"eq.{facility_id}",
+        "fetched_at": f"gte.{str(date.today())}",
+        "select": "fetched_at,standbytime"
+    }
+    response = requests.get(url, headers=HEADERS, params=params)
+    return response.json() if response.status_code == 200 else []
 
-# 表示用関数
 def display_tab(df, title, key_prefix):
-    if "TDS" in title:
-        st.write(f"### \U0001F3A2 {title}待ち時間")
-    else:
-        st.write(f"### \U0001F3F0 {title}待ち時間")
+    st.write(f"### {'\U0001F3A2' if 'TDS' in title else '\U0001F3F0'} {title}待ち時間")
 
     sort_order = st.radio(
-            "並び順を選択:",
-            ("待ち(長い順)", "待ち(短い順)", "高減少率"),
-            horizontal=True,
-            key=f"{key_prefix}_sort_order"
-        )
+        "並び順を選択:",
+        ("待ち(長い順)", "待ち(短い順)", "高減少率"),
+        horizontal=True,
+        key=f"{key_prefix}_sort_order"
+    )
 
     df = df.dropna(subset=["shortname", "standbytime"])
 
     if sort_order == "高減少率":
         drop_rate_list = []
         for _, row in df.iterrows():
-            log_url = f"{SUPABASE_URL}/rest/v1/" + ("tds_attraction_log" if "TDS" in title else "tdl_attraction_log")
-            log_params = {
-                "facilityid": f"eq.{row['facilityid']}",
-                "fetched_at": f"gte.{str(date.today())}",
-                "select": "fetched_at,standbytime"
-            }
-            log_res = requests.get(log_url, headers=HEADERS, params=log_params)
-            raw_log = log_res.json() if log_res.status_code == 200 else []
-            if raw_log:
-                _, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
-                drop_rate_list.append(drop_rate if drop_rate is not None else 0.0)
-            else:
-                drop_rate_list.append(0.0)
+            raw_log = get_facility_log("tds_attraction_log" if "TDS" in title else "tdl_attraction_log", row["facilityid"])
+            _, drop_rate = generate_wait_time_graph(raw_log, today_str) if raw_log else (None, 0.0)
+            drop_rate_list.append(drop_rate if drop_rate is not None else 0.0)
         df = df.assign(drop_rate=drop_rate_list)
         df_sorted = df.sort_values("drop_rate", ascending=False)
     elif sort_order == "待ち(短い順)":
@@ -159,62 +146,32 @@ def display_tab(df, title, key_prefix):
         facility_id = row['facilityid']
         fetched_time = row['fetched_at'].strftime('%H:%M:%S')
 
-        log_table = "tds_attraction_log" if "TDS" in title else "tdl_attraction_log"
-        log_url = f"{SUPABASE_URL}/rest/v1/{log_table}"
-        log_params = {
-                "facilityid": f"eq.{facility_id}",
-                "fetched_at": f"gte.{str(date.today())}",
-                "select": "fetched_at,standbytime"
-        }
-        log_res = requests.get(log_url, headers=HEADERS, params=log_params)
-        raw_log = log_res.json() if log_res.status_code == 200 else []
+        title_text = f"{wait}分：{name}"
+        with st.expander(title_text, expanded=False) as exp:
+            st.markdown(f"""
+                <small><b>施設名:</b> {row.get('facilitykananame', 'N/A')}<br>
+                <b>運営状況:</b> {row.get('operatingstatus', 'N/A')} /
+                <b>時間:</b> {row.get('operatinghoursfrom', 'N/A')} - {row.get('operatinghoursto', 'N/A')}<br>
+                <b>更新:</b> {row.get('updatetime', fetched_time)}</small>
+            """, unsafe_allow_html=True)
 
-        drop_rate_display = ""
-        buf = None
-        drop_rate = None
-        drop_rate_display = ""
+            raw_log = get_facility_log("tds_attraction_log" if "TDS" in title else "tdl_attraction_log", facility_id)
+            if raw_log:
+                buf, drop_rate = generate_wait_time_graph(raw_log, today_str)
+                if drop_rate is not None:
+                    st.markdown(f"<small><b>減少率:</b> {drop_rate:.1f}%</small>", unsafe_allow_html=True)
+                st.image(buf)
+            else:
+                st.info("グラフ表示用のデータがありません。")
 
-        title_text = f"{wait}分：{name}{drop_rate_display}"
-        with st.expander(title_text, expanded=False):
-            st.markdown(f"<small>**施設名**: {row.get('facilitykananame', 'N/A')}</small>", unsafe_allow_html=True)
-            st.markdown(f"<small>**運営状況**: {row.get('operatingstatus', 'N/A')} / **運営時間**: {row.get('operatinghoursfrom', 'N/A')} - {row.get('operatinghoursto', 'N/A')}</small>", unsafe_allow_html=True)
-            st.markdown(f"<small>**更新時間**: {row.get('updatetime', fetched_time)}</small>", unsafe_allow_html=True)
+# データ準備
+df_tds = fetch_latest_data("tds_attraction_log")
+df_tdl = fetch_latest_data("tdl_attraction_log")
+shortname_df = fetch_shortname()
+df_tds = merge_with_shortname(df_tds, shortname_df)
+df_tdl = merge_with_shortname(df_tdl, shortname_df)
 
-            status_url = f"{SUPABASE_URL}/rest/v1/{log_table}"
-            status_params = {
-                "facilityid": f"eq.{facility_id}",
-                "select": "dpastatuscd,ppstatuscd",
-                "order": "fetched_at.desc",
-                "limit": 1
-            }
-            status_res = requests.get(status_url, headers=HEADERS, params=status_params)
-            status_row = status_res.json() if status_res.status_code == 200 else []
-
-            if status_row:
-                status = status_row[0]
-                dpa = status.get("dpastatuscd")
-                pp = status.get("ppstatuscd")
-
-                if dpa is not None:
-                    dpa = str(dpa)
-                    if dpa == "1":
-                        st.markdown('<small><span style="color:red">**発券状況**: DPA販売中</span></small>', unsafe_allow_html=True)
-                    elif dpa == "2":
-                        st.markdown('<small><span style="color:gray">**発券状況**: DPA販売終了</span></small>', unsafe_allow_html=True)
-                elif pp is not None:
-                    pp = str(pp)
-                    if pp == "1":
-                        st.markdown('<small><span style="color:red">**発券状況**: プライオリティパス発券中</span></small>', unsafe_allow_html=True)
-                    elif pp == "2":
-                        st.markdown('<small><span style="color:gray">**発券状況**: プライオリティパス発券終了</span></small>', unsafe_allow_html=True)
-
-                if not raw_log:
-                    st.info("グラフ表示用のデータがありません。")
-                else:
-                    buf, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
-                    st.image(buf)
-
-# Streamlit UI設定
+# UI
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
 tab1, tab2 = st.tabs(["\U0001F3A2 TDS", "\U0001F3F0 TDL"])
 
