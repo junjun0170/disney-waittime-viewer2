@@ -120,7 +120,7 @@ def display_tab(df, title, key_prefix):
 
     sort_order = st.radio(
         "並び順を選択:",
-        ("待順(長)", "待順(短)", "高減少率"),
+        ("待ち(長い順)", "待ち(短い順)", "高減少率"),
         horizontal=True,
         key=f"{key_prefix}_sort_order"
     )
@@ -199,21 +199,6 @@ def display_tab(df, title, key_prefix):
             else:
                 st.info("グラフ表示用のデータがありません。")
 
-@st.cache_data(ttl=300)
-def fetch_latest_status_log(table_name):
-    url = f"{SUPABASE_URL}/rest/v1/{table_name}"
-    params = {
-        "select": "facilityid,dpastatuscd,ppstatuscd,operatingstatuscd,fetched_at",
-        "order": "facilityid,fetched_at.desc",
-    }
-    res = requests.get(url, headers=HEADERS, params=params)
-    if res.status_code != 200:
-        return pd.DataFrame()
-    df = pd.DataFrame(res.json())
-    if df.empty:
-        return pd.DataFrame()
-    return df.sort_values("fetched_at").drop_duplicates(subset="facilityid", keep="last")
-
 # データ準備
 df_tds = fetch_latest_data("tds_attraction_log")
 df_tdl = fetch_latest_data("tdl_attraction_log")
@@ -221,46 +206,12 @@ shortname_df = fetch_shortname()
 df_tds = merge_with_shortname(df_tds, shortname_df)
 df_tdl = merge_with_shortname(df_tdl, shortname_df)
 
-# standbytime を数値に変換（display_tab() 内の並び順対策）
-df_tds["standbytime"] = pd.to_numeric(df_tds["standbytime"], errors="coerce")
-df_tdl["standbytime"] = pd.to_numeric(df_tdl["standbytime"], errors="coerce")
-
 # UI
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
-tab1, tab2, tab3 = st.tabs(["\U0001F3A2 TDS", "\U0001F3F0 TDL", "🎫 パス"])
+tab1, tab2 = st.tabs(["\U0001F3A2 TDS", "\U0001F3F0 TDL"])
 
 with tab1:
     display_tab(df_tds, "TDS", key_prefix="tds")
 
 with tab2:
     display_tab(df_tdl, "TDL", key_prefix="tdl")
-
-with tab3:
-    df_status_tds = fetch_latest_status_log("tds_attraction_log")
-    df_status_tdl = fetch_latest_status_log("tdl_attraction_log")
-    df_status_all = pd.concat([df_status_tds, df_status_tdl], ignore_index=True)
-
-    df_all = pd.concat([df_tds.assign(park="TDS"), df_tdl.assign(park="TDL")], ignore_index=True)
-    df_merged = pd.merge(df_all, df_status_all, on="facilityid", how="left")
-
-    # 存在しない列への安全な対応
-    for col in ["dpastatuscd", "ppstatuscd", "operatingstatuscd"]:
-        if col not in df_merged.columns:
-            df_merged[col] = None
-        df_merged[col] = df_merged[col].astype(str)
-
-    dpa_list = df_merged[df_merged["dpastatuscd"] == "1"]["facilitykananame"].dropna().unique().tolist()
-    pp_list = df_merged[df_merged["ppstatuscd"] == "1"]["facilitykananame"].dropna().unique().tolist()
-    linecut_list = df_merged[df_merged["operatingstatuscd"] == "045"]["facilitykananame"].dropna().unique().tolist()
-
-    def render_section(title, items):
-        st.markdown(f"### {title}")
-        if items:
-            for name in sorted(set(items)):
-                st.markdown(f"- {name}")
-        else:
-            st.markdown("なし")
-
-    render_section("DPA", dpa_list)
-    render_section("プライオリティパス", pp_list)
-    render_section("ラインカット", linecut_list)
