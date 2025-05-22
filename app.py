@@ -164,6 +164,35 @@ def display_tab(df, title, key_prefix):
                 <b>更新:</b> {row.get('updatetime', fetched_time)}</small>
             """, unsafe_allow_html=True)
 
+            # 発券状況の取得と表示
+            status_url = f"{SUPABASE_URL}/rest/v1/" + ("tds_attraction_log" if "TDS" in title else "tdl_attraction_log")
+            status_params = {
+                "facilityid": f"eq.{facility_id}",
+                "select": "dpastatuscd,ppstatuscd",
+                "order": "fetched_at.desc",
+                "limit": 1
+            }
+            status_res = requests.get(status_url, headers=HEADERS, params=status_params)
+            status_row = status_res.json() if status_res.status_code == 200 else []
+
+            if status_row:
+                status = status_row[0]
+                dpa = status.get("dpastatuscd")
+                pp = status.get("ppstatuscd")
+
+                if dpa is not None:
+                    dpa = str(dpa)
+                    if dpa == "1":
+                        st.markdown('<small><span style="color:red">**発券状況**: DPA販売中</span></small>', unsafe_allow_html=True)
+                    elif dpa == "2":
+                        st.markdown('<small><span style="color:gray">**発券状況**: DPA販売終了</span></small>', unsafe_allow_html=True)
+                elif pp is not None:
+                    pp = str(pp)
+                    if pp == "1":
+                        st.markdown('<small><span style="color:red">**発券状況**: プライオリティパス発券中</span></small>', unsafe_allow_html=True)
+                    elif pp == "2":
+                        st.markdown('<small><span style="color:gray">**発券状況**: プライオリティパス発券終了</span></small>', unsafe_allow_html=True)
+
             if raw_log:
                 buf, _ = generate_wait_time_graph(raw_log, today_str)
                 st.image(buf)
