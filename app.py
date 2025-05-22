@@ -203,7 +203,7 @@ def display_tab(df, title, key_prefix):
 def fetch_latest_status_log(table_name):
     url = f"{SUPABASE_URL}/rest/v1/{table_name}"
     params = {
-        "select": "facilityid,dpastatuscd,ppstatuscd,fetched_at",
+        "select": "facilityid,dpastatuscd,ppstatuscd,operatingstatuscd,fetched_at",
         "order": "facilityid,fetched_at.desc",
     }
     res = requests.get(url, headers=HEADERS, params=params)
@@ -238,6 +238,11 @@ with tab3:
 
     df_all = pd.concat([df_tds.assign(park="TDS"), df_tdl.assign(park="TDL")], ignore_index=True)
     df_merged = pd.merge(df_all, df_status_all, on="facilityid", how="left")
+
+    # 型が異なると比較できないので文字列化
+    df_merged["dpastatuscd"] = df_merged["dpastatuscd"].astype(str)
+    df_merged["ppstatuscd"] = df_merged["ppstatuscd"].astype(str)
+    df_merged["operatingstatuscd"] = df_merged["operatingstatuscd"].astype(str)
 
     dpa_list = df_merged[df_merged["dpastatuscd"] == "1"]["facilitykananame"].dropna().unique().tolist()
     pp_list = df_merged[df_merged["ppstatuscd"] == "1"]["facilitykananame"].dropna().unique().tolist()
