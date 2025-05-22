@@ -6,13 +6,14 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import io
 
-# Supabase REST API設定
-SUPABASE_URL = "https://rfrnpofepmlezzqijlzt.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmcm5wb2ZlcG1sZXp6cWlqbHp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2NjMwMTgsImV4cCI6MjA2MzIzOTAxOH0.3iJiZj61kYDMlIcJvz-VBV0JiAlLw9R7mAYutjYFoEA"
+# secrets.toml から読み込み
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}"
 }
+
 
 # 今日の日付
 today_str = datetime.now().strftime("%Y-%m-%d")
