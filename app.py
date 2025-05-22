@@ -199,6 +199,21 @@ def display_tab(df, title, key_prefix):
             else:
                 st.info("グラフ表示用のデータがありません。")
 
+@st.cache_data(ttl=300)
+def fetch_latest_status_log(table_name):
+    url = f"{SUPABASE_URL}/rest/v1/{table_name}"
+    params = {
+        "select": "facilityid,dpastatuscd,ppstatuscd,fetched_at",
+        "order": "facilityid,fetched_at.desc",
+    }
+    res = requests.get(url, headers=HEADERS, params=params)
+    if res.status_code != 200:
+        return pd.DataFrame()
+    df = pd.DataFrame(res.json())
+    if df.empty:
+        return pd.DataFrame()
+    return df.sort_values("fetched_at").drop_duplicates(subset="facilityid", keep="last")
+
 # データ準備
 df_tds = fetch_latest_data("tds_attraction_log")
 df_tdl = fetch_latest_data("tdl_attraction_log")
@@ -217,35 +232,16 @@ with tab2:
     display_tab(df_tdl, "TDL", key_prefix="tdl")
 
 with tab3:
+    df_status_tds = fetch_latest_status_log("tds_attraction_log")
+    df_status_tdl = fetch_latest_status_log("tdl_attraction_log")
+    df_status_all = pd.concat([df_status_tds, df_status_tdl], ignore_index=True)
+
     df_all = pd.concat([df_tds.assign(park="TDS"), df_tdl.assign(park="TDL")], ignore_index=True)
-    dpa_list = []
-    pp_list = []
-    linecut_list = []
+    df_merged = pd.merge(df_all, df_status_all, on="facilityid", how="left")
 
-    for _, row in df_all.iterrows():
-        facility_id = row["facilityid"]
-        facility_name = row.get("facilitykananame", "名称不明")
-
-        # 発券ステータス取得
-        status_url = f"{SUPABASE_URL}/rest/v1/" + ("tds_attraction_log" if row["park"] == "TDS" else "tdl_attraction_log")
-        status_params = {
-            "facilityid": f"eq.{facility_id}",
-            "select": "dpastatuscd,ppstatuscd",
-            "order": "fetched_at.desc",
-            "limit": 1
-        }
-        res = requests.get(status_url, headers=HEADERS, params=status_params)
-        status_row = res.json() if res.status_code == 200 else []
-
-        if status_row:
-            s = status_row[0]
-            if str(s.get("dpastatuscd")) == "1":
-                dpa_list.append(facility_name)
-            if str(s.get("ppstatuscd")) == "1":
-                pp_list.append(facility_name)
-
-        if str(row.get("operatingstatuscd")) == "045":
-            linecut_list.append(facility_name)
+    dpa_list = df_merged[df_merged["dpastatuscd"] == "1"]["facilitykananame"].dropna().unique().tolist()
+    pp_list = df_merged[df_merged["ppstatuscd"] == "1"]["facilitykananame"].dropna().unique().tolist()
+    linecut_list = df_merged[df_merged["operatingstatuscd"] == "045"]["facilitykananame"].dropna().unique().tolist()
 
     def render_section(title, items):
         st.markdown(f"### {title}")
