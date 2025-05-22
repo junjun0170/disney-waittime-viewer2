@@ -123,7 +123,7 @@ def display_tab(df, title, key_prefix):
 
     sort_order = st.radio(
             "並び順を選択:",
-            ("待ち時間（長い順）", "待ち時間（短い順）", "高減少率"),
+            ("待ち(長い順)", "待ち(短い順)", "高減少率"),
             horizontal=True,
             key=f"{key_prefix}_sort_order"
         )
@@ -148,7 +148,7 @@ def display_tab(df, title, key_prefix):
                 drop_rate_list.append(0.0)
         df = df.assign(drop_rate=drop_rate_list)
         df_sorted = df.sort_values("drop_rate", ascending=False)
-    elif sort_order == "待ち時間（短い順）":
+    elif sort_order == "待ち(短い順)":
         df_sorted = df.sort_values("standbytime")
     else:
         df_sorted = df.sort_values("standbytime", ascending=False)
@@ -173,14 +173,11 @@ def display_tab(df, title, key_prefix):
         if raw_log:
             buf, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
             if drop_rate is not None:
-                if drop_rate >= 30:
-                    drop_rate_display = f" <span style='color:red'>(減少率: {drop_rate:.1f}%)</span>"
-                else:
-                    drop_rate_display = f" (減少率: {drop_rate:.1f}%)"
+                drop_rate_display = f" (減少率: {drop_rate:.1f}%)"
         else:
             buf = None
 
-        title_text = f"{name} - 待ち時間: {wait}分{drop_rate_display}"
+        title_text = f"{wait}分：{name}{drop_rate_display}"
         with st.expander(title_text, expanded=False):
             st.markdown(f"<small>**施設名**: {row.get('facilitykananame', 'N/A')}</small>", unsafe_allow_html=True)
             st.markdown(f"<small>**運営状況**: {row.get('operatingstatus', 'N/A')} / **運営時間**: {row.get('operatinghoursfrom', 'N/A')} - {row.get('operatinghoursto', 'N/A')}</small>", unsafe_allow_html=True)
