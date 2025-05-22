@@ -208,12 +208,12 @@ def display_tab(df, title, key_prefix):
                     elif pp == "2":
                         st.markdown('<small><span style="color:gray">**発券状況**: プライオリティパス発券終了</span></small>', unsafe_allow_html=True)
 
-                                    if st.toggle("グラフを表示", key=f"{facility_id}_toggle"):
-                if not raw_log:
-                    st.info("グラフ表示用のデータがありません。")
-                else:
-                    buf, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
-                    st.image(buf)
+                if st.toggle("グラフを表示", key=f"{facility_id}_toggle"):
+                    if not raw_log:
+                        st.info("グラフ表示用のデータがありません。")
+                    else:
+                        buf, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
+                        st.image(buf)
 
 # Streamlit UI設定
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
