@@ -208,10 +208,38 @@ df_tdl = merge_with_shortname(df_tdl, shortname_df)
 
 # UI
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
-tab1, tab2 = st.tabs(["\U0001F3A2 TDS", "\U0001F3F0 TDL"])
+tab1, tab2, tab3 = st.tabs(["\U0001F3A2 TDS", "\U0001F3F0 TDL", "🎫 パス"])
 
 with tab1:
     display_tab(df_tds, "TDS", key_prefix="tds")
 
 with tab2:
     display_tab(df_tdl, "TDL", key_prefix="tdl")
+
+with tab3:
+    # TDS + TDL を結合し、発券中のアトラクションのみを抽出
+    df_all = pd.concat([df_tds.assign(park="TDS"), df_tdl.assign(park="TDL")], ignore_index=True)
+    df_pass = []
+
+    for _, row in df_all.iterrows():
+        facility_id = row["facilityid"]
+        status_url = f"{SUPABASE_URL}/rest/v1/" + ("tds_attraction_log" if row["park"] == "TDS" else "tdl_attraction_log")
+        status_params = {
+            "facilityid": f"eq.{facility_id}",
+            "select": "dpastatuscd,ppstatuscd",
+            "order": "fetched_at.desc",
+            "limit": 1
+        }
+        res = requests.get(status_url, headers=HEADERS, params=status_params)
+        status_row = res.json() if res.status_code == 200 else []
+
+        if status_row:
+            s = status_row[0]
+            if str(s.get("dpastatuscd")) == "1" or str(s.get("ppstatuscd")) == "1":
+                df_pass.append(row)
+
+    df_pass = pd.DataFrame(df_pass)
+    if df_pass.empty:
+        st.info("現在、DPAまたはプライオリティパスが発券中のアトラクションはありません。")
+    else:
+        display_tab(df_pass, "パス", key_prefix="pass")
