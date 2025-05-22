@@ -1,15 +1,18 @@
 import streamlit as st
-from supabase import create_client
+import requests
 import pandas as pd
 from datetime import datetime, timedelta, date
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import io
 
-# Supabase接続設定
-url = "https://rfrnpofepmlezzqijlzt.supabase.co"
-key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmcm5wb2ZlcG1sZXp6cWlqbHp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2NjMwMTgsImV4cCI6MjA2MzIzOTAxOH0.3iJiZj61kYDMlIcJvz-VBV0JiAlLw9R7mAYutjYFoEA"
-supabase = create_client(url, key)
+# Supabase REST API設定
+SUPABASE_URL = "https://rfrnpofepmlezzqijlzt.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmcm5wb2ZlcG1sZXp6cWlqbHp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2NjMwMTgsImV4cCI6MjA2MzIzOTAxOH0.3iJiZj61kYDMlIcJvz-VBV0JiAlLw9R7mAYutjYFoEA"
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}"
+}
 
 # 今日の日付
 today_str = datetime.now().strftime("%Y-%m-%d")
@@ -76,7 +79,16 @@ def generate_wait_time_graph(raw_data, date_str):
 
 # データ取得関数
 def fetch_latest_data(table_name):
-    response = supabase.table(table_name).select("*").gte("fetched_at", today_str).execute()
+    url = f"{SUPABASE_URL}/rest/v1/{table_name}"
+    params = {
+        "fetched_at": f"gte.{today_str}",
+        "select": "*"
+    }
+    response = requests.get(url, headers=HEADERS, params=params)
+    if response.status_code != 200:
+        st.error(f"データ取得に失敗しました: {response.status_code}")
+        return pd.DataFrame()
+    data = response.json()
     df = pd.DataFrame(response.data)
 
     if df.empty:
@@ -88,8 +100,8 @@ def fetch_latest_data(table_name):
     return df_latest
 
 # attraction_short_nameの取得
-shortname_df = pd.DataFrame(
-    supabase.table("attraction_short_name").select("*").execute().data
+shortname_res = requests.get(f"{SUPABASE_URL}/rest/v1/attraction_short_name", headers=HEADERS)
+shortname_df = pd.DataFrame(shortname_res.json()).select("*").execute().data
 )
 
 # TDS / TDL ログ取得
@@ -109,11 +121,9 @@ def display_tab(df, title, key_prefix):
     else:
         st.write(f"### \U0001F3F0 {title}待ち時間")
 
-    with st.container():
-        st.markdown("<style>.stRadio > div{font-size:8px;}</style>", unsafe_allow_html=True)
-        sort_order = st.radio(
+    sort_order = st.radio(
             "並び順を選択:",
-            ("待ち(長い順)", "待ち(短い順)", "高減少率"),
+            ("待ち時間（長い順）", "待ち時間（短い順）", "高減少率"),
             horizontal=True,
             key=f"{key_prefix}_sort_order"
         )
@@ -121,9 +131,8 @@ def display_tab(df, title, key_prefix):
     df = df.dropna(subset=["shortname", "standbytime"])
 
     if sort_order == "高減少率":
-        df = df.copy()
-        df["drop_rate"] = 0.0
-        for i, row in df.iterrows():
+        drop_rate_list = []
+        for _, row in df.iterrows():
             raw_log = supabase.table("tds_attraction_log" if "TDS" in title else "tdl_attraction_log") \
                 .select("fetched_at, standbytime") \
                 .eq("facilityid", row["facilityid"]) \
@@ -131,10 +140,12 @@ def display_tab(df, title, key_prefix):
                 .execute().data
             if raw_log:
                 _, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
-                if drop_rate is not None:
-                    df.at[i, "drop_rate"] = drop_rate
+                drop_rate_list.append(drop_rate if drop_rate is not None else 0.0)
+            else:
+                drop_rate_list.append(0.0)
+        df = df.assign(drop_rate=drop_rate_list)
         df_sorted = df.sort_values("drop_rate", ascending=False)
-    elif sort_order == "待ち(短い順)":
+    elif sort_order == "待ち時間（短い順）":
         df_sorted = df.sort_values("standbytime")
     else:
         df_sorted = df.sort_values("standbytime", ascending=False)
@@ -146,31 +157,41 @@ def display_tab(df, title, key_prefix):
         fetched_time = row['fetched_at'].strftime('%H:%M:%S')
 
         log_table = "tds_attraction_log" if "TDS" in title else "tdl_attraction_log"
-        raw_log = supabase.table(log_table) \
-            .select("fetched_at, standbytime") \
-            .eq("facilityid", facility_id) \
-            .gte("fetched_at", str(date.today())) \
-            .execute().data
+        log_url = f"{SUPABASE_URL}/rest/v1/{log_table}"
+            log_params = {
+                "facilityid": f"eq.{facility_id}",
+                "fetched_at": f"gte.{str(date.today())}",
+                "select": "fetched_at,standbytime"
+            }
+            log_res = requests.get(log_url, headers=HEADERS, params=log_params)
+            raw_log = log_res.json() if log_res.status_code == 200 else []
 
         drop_rate_display = ""
         if raw_log:
             buf, drop_rate = generate_wait_time_graph(raw_log, str(date.today()))
             if drop_rate is not None:
-                drop_rate_display = f" (減少率: {drop_rate:.1f}%)"
+                if drop_rate >= 30:
+                    drop_rate_display = f" <span style='color:red'>(減少率: {drop_rate:.1f}%)</span>"
+                else:
+                    drop_rate_display = f" (減少率: {drop_rate:.1f}%)"
         else:
             buf = None
 
-        title_text = f"{wait}分：{name}{drop_rate_display}"
+        title_text = f"{name} - 待ち時間: {wait}分{drop_rate_display}"
         with st.expander(title_text, expanded=False):
             st.markdown(f"<small>**施設名**: {row.get('facilitykananame', 'N/A')}</small>", unsafe_allow_html=True)
             st.markdown(f"<small>**運営状況**: {row.get('operatingstatus', 'N/A')} / **運営時間**: {row.get('operatinghoursfrom', 'N/A')} - {row.get('operatinghoursto', 'N/A')}</small>", unsafe_allow_html=True)
             st.markdown(f"<small>**更新時間**: {row.get('updatetime', fetched_time)}</small>", unsafe_allow_html=True)
 
-            status_row = supabase.table(log_table) \
-                .select("dpastatuscd, ppstatuscd") \
-                .eq("facilityid", facility_id) \
-                .order("fetched_at", desc=True) \
-                .limit(1).execute().data
+            status_url = f"{SUPABASE_URL}/rest/v1/{log_table}"
+            status_params = {
+                "facilityid": f"eq.{facility_id}",
+                "select": "dpastatuscd,ppstatuscd",
+                "order": "fetched_at.desc",
+                "limit": 1
+            }
+            status_res = requests.get(status_url, headers=HEADERS, params=status_params)
+            status_row = status_res.json() if status_res.status_code == 200 else []
 
             if status_row:
                 status = status_row[0]
