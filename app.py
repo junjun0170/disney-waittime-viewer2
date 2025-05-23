@@ -17,7 +17,7 @@ from streamlit_autorefresh import st_autorefresh
 col1, col2 = st.columns(2)
 # 自動更新（5分）トグル
 with col1:
-    if st.toggle("🔁 自動更新(5分)", key="autorefresh_toggle"):
+    if st.toggle("🔁 自動更新(5分)", value=True, key="autorefresh_toggle"):
         st_autorefresh(interval=300_000, key="auto_refresh")
 # TDS⇔TDL切り替えトグル
 with col2:
