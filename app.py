@@ -257,6 +257,7 @@ def display_alert_tab(df_all, status_alert_ids=None):
             name = row["shortname"]
             park = row["park"]
             status = row["operatingstatus"]
+            fid = row["facilityid"]
             updated = row.get("updatetime", row.get("fetched_at"))
 
             if isinstance(updated, (pd.Timestamp, datetime)):
