@@ -17,11 +17,11 @@ from streamlit_autorefresh import st_autorefresh
 col1, col2 = st.columns(2)
 # 自動更新（5分）トグル
 with col1:
-    if st.toggle("🔁 自動更新（5分ごと）", key="autorefresh_toggle"):
+    if st.toggle("🔁 自動更新(5分)", key="autorefresh_toggle"):
         st_autorefresh(interval=300_000, key="auto_refresh")
 # TDS⇔TDL切り替えトグル
 with col2:
-    park_toggle = st.toggle("🎡 TDLに切り替え", key="tdl_toggle")
+    park_toggle = st.toggle("🎡 TDL切替", key="tdl_toggle")
     current_park = "TDL" if park_toggle else "TDS"
 
 # --- Supabase設定 ---
@@ -162,7 +162,7 @@ def detect_status_change_facilities(df_log: pd.DataFrame) -> list[str]:
             facility_ids.append(fid)
 
         # 「一時運営中止」が続いている
-        elif all(s == "一時運営中止" for s in status_list[-3:]):
+        elif all(s == "一時運営中止" for s in status_list[-1:]):
             facility_ids.append(fid)
 
     return facility_ids
@@ -219,7 +219,7 @@ def display_pass_summary(df_tds, df_tdl):
 
 # --- 注目施設表示 ---
 def display_alert_tab(df_all, status_alert_ids=None):
-    st.markdown("### 🔔 狙い目施設（減少率・待ち時間条件）")
+    st.markdown("### 🔔 狙い目施設")
 
     alert_df = df_all[(df_all["standbytime"] <= 40) & (df_all["drop_rate"].fillna(0) >= 30)].copy()
 
@@ -267,7 +267,7 @@ def display_facility_table(df_all):
     })
     df_view["DPA"] = df_view["DPA"].replace({"1": "販売中", "2": "終了"})
     df_view["PP"] = df_view["PP"].replace({"1": "発券中", "2": "終了"})
-    st.markdown("### 📋 全施設一覧（並び替え・検索可能）")
+    st.markdown("### 📋 全施設一覧")
     st.dataframe(df_view, use_container_width=True)
 
 # --- UI構成 ---
