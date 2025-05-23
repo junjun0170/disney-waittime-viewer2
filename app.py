@@ -10,14 +10,14 @@ import numpy as np
 import io
 
 # --- 設定とヘッダー ---
-st.set_page_config(page_title="待ち時間グラフ", layout="centered")
+st.set_page_config(page_title="待ち時間グラフ", value=True, layout="centered")
 
 from streamlit_autorefresh import st_autorefresh
 
 col1, col2 = st.columns(2)
 # 自動更新（5分）トグル
 with col1:
-    if st.toggle("🔁 自動更新(5分)", value=True, key="autorefresh_toggle"):
+    if st.toggle("🔁 自動更新(5分)", key="autorefresh_toggle"):
         st_autorefresh(interval=300_000, key="auto_refresh")
 # TDS⇔TDL切り替えトグル
 with col2:
@@ -174,13 +174,15 @@ def display_tab(df_processed, df_log, park_label, today_str):
     df = df_processed.dropna(subset=["shortname", "standbytime"])
     df_sorted = df.sort_values("drop_rate", ascending=False) if sort_order == "高減少率" \
         else df.sort_values("standbytime", ascending=(sort_order == "待順(短)"))
+    selected_fid = st.session_state.get("selected_fid")
     for _, row in df_sorted.iterrows():
         name, wait, fid = row["shortname"], row["standbytime"], row["facilityid"]
         drop = row.get("drop_rate")
         updated = row["fetched_at"].strftime('%H:%M')
         drop_txt = f"（{drop:.1f}%減少）" if drop is not None else ""
-        with st.expander(f"{wait}分：{name}{drop_txt}", expanded=False):
-            st.markdown(f"<a name='{fid}'></a>", unsafe_allow_html=True)
+        # アコーディオン展開制御（選択fidのみ展開）
+        expanded_flag = (fid == selected_fid)
+        with st.expander(f"{wait}分：{name}{drop_txt}", expanded=expanded_flag):
             st.markdown(f"""
                 <small><b>施設名:</b> {row.get('facilitykananame', 'N/A')}<br>
                 <b>運営状況:</b> {row.get('operatingstatus', 'N/A')} / 
@@ -209,6 +211,10 @@ def display_tab(df_processed, df_log, park_label, today_str):
 
             st.markdown("#### ⏱ 直近5回分の情報")
             st.dataframe(df_recent_display, use_container_width=True)
+            
+            # ✅ 展開後に選択状態を解除（1回のみ開く）
+            if expanded_flag:
+                st.session_state["selected_fid"] = None
                   
 # --- 発券状況まとめ ---
 def display_pass_summary(df_tds, df_tdl):
@@ -250,7 +256,6 @@ def display_alert_tab(df_all, status_alert_ids=None):
         for _, row in status_df.iterrows():
             name = row["shortname"]
             park = row["park"]
-            fid = row["facilityid"]
             status = row["operatingstatus"]
             updated = row.get("updatetime", row.get("fetched_at"))
 
@@ -265,9 +270,10 @@ def display_alert_tab(df_all, status_alert_ids=None):
                 label = "一時運営中止中"
             else:
                 label = f"状態: {status}"
-
-            # 🔗 ページ内リンク付きの表示
-            st.markdown(f"- ({park}) [▶ {name}](#{fid})：{label}（{updated_str}更新）", unsafe_allow_html=True)
+                
+            if st.button(f"▶ {name}：{label}（{updated_str}更新）", key=f"btn_{fid}"):
+                st.session_state["selected_fid"] = fid
+            #st.markdown(f"- ({park}) {name}：{label}（{updated_str}更新）")
 
     else:
         st.info("現在、運営状態による注目施設はありません。")
