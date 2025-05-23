@@ -209,8 +209,9 @@ def display_tab(df_processed, df_log, park_label, today_str):
                     "更新時間": df_recent["fetched_at"].dt.strftime("%H:%M")
                 }).sort_values("更新時間", ascending=False)
 
-            st.markdown("#### ⏱ 直近5回分の情報")
-            st.dataframe(df_recent_display, use_container_width=True)
+                st.markdown("#### ⏱ 直近5回分の情報")
+                st.dataframe(df_recent_display, use_container_width=True)
+
             
             # ✅ 展開後に選択状態を解除（1回のみ開く）
             if expanded_flag:
