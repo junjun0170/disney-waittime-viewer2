@@ -71,13 +71,20 @@ def preprocess_logs(df_log, shortname_df, park_name):
         else:
             start = df_hour.iloc[0]["standbytime"]
             end = df_hour.iloc[-1]["standbytime"]
-            if start and end != 0:
-                rate = ((start - end) / start) * 100
-            elif end == 0:
-                rate = 0
-            else:
+
+            # NaNチェック
+            if pd.isna(start) or pd.isna(end):
                 rate = None
+            # 両方数値で、start=0は回避
+            elif start == 0:
+                rate = None  # 0割回避、定義できない
+            elif end == 0:
+                rate = 0     # 明示的に0%
+            else:
+                rate = ((start - end) / start) * 100
+
             drop_rates.append(rate)
+
     df_latest["drop_rate"] = drop_rates
     df_latest["park"] = park_name
     df_latest["standbytime"] = pd.to_numeric(df_latest["standbytime"], errors="coerce").astype("Int64")
@@ -180,7 +187,7 @@ def display_tab(df_processed, df_log, park_label, today_str):
         name, wait, fid = row["shortname"], row["standbytime"], row["facilityid"]
         drop = row.get("drop_rate")
         updated = row["fetched_at"].strftime('%H:%M')
-        drop_txt = f"（{drop:.1f}%減少）" if drop is not None else ""
+        drop_txt = f"（{drop:.1f}%減少）" if pd.notnull(drop) else ""
         # アコーディオン展開制御（選択fidのみ展開）
         expanded_flag = (fid == selected_fid)
         with st.expander(f"{wait}分：{name}{drop_txt}", expanded=expanded_flag):
