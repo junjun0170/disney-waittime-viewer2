@@ -175,6 +175,7 @@ def display_tab(df_processed, df_log, park_label, today_str):
     df_sorted = df.sort_values("drop_rate", ascending=False) if sort_order == "高減少率" \
         else df.sort_values("standbytime", ascending=(sort_order == "待順(短)"))
     selected_fid = st.session_state.get("selected_fid")
+    
     for _, row in df_sorted.iterrows():
         name, wait, fid = row["shortname"], row["standbytime"], row["facilityid"]
         drop = row.get("drop_rate")
@@ -259,6 +260,7 @@ def display_alert_tab(df_all, status_alert_ids=None):
             park = row["park"]
             status = row["operatingstatus"]
             fid = row["facilityid"]
+            park = row["park"]
             updated = row.get("updatetime", row.get("fetched_at"))
 
             if isinstance(updated, (pd.Timestamp, datetime)):
@@ -275,6 +277,7 @@ def display_alert_tab(df_all, status_alert_ids=None):
                 
             if st.button(f"▶ {name}：{label}（{updated_str}更新）", key=f"btn_{fid}"):
                 st.session_state["selected_fid"] = fid
+                st.session_state["selected_park"] = row["park"]
             #st.markdown(f"- ({park}) {name}：{label}（{updated_str}更新）")
 
     else:
