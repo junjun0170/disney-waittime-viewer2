@@ -179,8 +179,8 @@ def display_tab(df_processed, df_log, park_label, today_str):
         drop = row.get("drop_rate")
         updated = row["fetched_at"].strftime('%H:%M')
         drop_txt = f"（{drop:.1f}%減少）" if drop is not None else ""
-        st.markdown(f"<a name='{fid}'></a>", unsafe_allow_html=True)
         with st.expander(f"{wait}分：{name}{drop_txt}", expanded=False):
+            st.markdown(f"<a name='{fid}'></a>", unsafe_allow_html=True)
             st.markdown(f"""
                 <small><b>施設名:</b> {row.get('facilitykananame', 'N/A')}<br>
                 <b>運営状況:</b> {row.get('operatingstatus', 'N/A')} / 
@@ -250,6 +250,7 @@ def display_alert_tab(df_all, status_alert_ids=None):
         for _, row in status_df.iterrows():
             name = row["shortname"]
             park = row["park"]
+            fid = row["facilityid"]
             status = row["operatingstatus"]
             updated = row.get("updatetime", row.get("fetched_at"))
 
