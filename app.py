@@ -254,7 +254,15 @@ def display_alert_tab(df_all, status_alert_ids=None):
         st.info("現在、条件に合致する施設はありません。")
     else:
         for _, row in alert_df.sort_values("drop_rate", ascending=False).iterrows():
-            st.markdown(f"- ({row['park']}) {row['shortname']}：{row['standbytime']}分（{row['drop_rate']:.1f}%減少）")
+            name = row["shortname"]
+            park = row["park"]
+            fid = row["facilityid"]
+            wait = row["standbytime"]
+            drop = row["drop_rate"]
+            
+            if st.button(f"▶ {name}：{wait}分（{drop:.1f}%減少）", key=f"alert_btn_{fid}"):
+                st.session_state["selected_fid"] = fid
+                st.session_state["selected_park"] = park
 
     # --- 運営状態による注目施設表示 ---
     st.markdown("### 🔧 運営状態による注目施設")
@@ -309,26 +317,26 @@ df_shortname = fetch_shortname_table()
 df_processed_tds = preprocess_logs(df_log_tds, df_shortname, "TDS")
 df_processed_tdl = preprocess_logs(df_log_tdl, df_shortname, "TDL")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🎢 TDS", "🏰 TDL", "🎫 パス状況", "🔔 注目施設", "📋 一覧表示"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 待ち時間", "🎫 パス状況", "🔔 注目施設", "📋 一覧表示"])
 
 with tab1:
-    display_tab(df_processed_tds, df_log_tds, "TDS", today_str)
+    if current_park == "TDS":
+        display_tab(df_processed_tds, df_log_tds, "TDS", today_str)
+    else:
+        display_tab(df_processed_tdl, df_log_tdl, "TDL", today_str)
 
 with tab2:
-    display_tab(df_processed_tdl, df_log_tdl, "TDL", today_str)
-
-with tab3:
     if current_park == "TDS":
         display_pass_summary(df_processed_tds, pd.DataFrame())
     else:
         display_pass_summary(pd.DataFrame(), df_processed_tdl)
 
-with tab4:
+with tab3:
     df_alert_source = df_processed_tdl if current_park == "TDL" else df_processed_tds
     df_log_alert = df_log_tdl if current_park == "TDL" else df_log_tds
     status_alert_ids = detect_status_change_facilities(df_log_alert)
     display_alert_tab(df_alert_source, status_alert_ids=status_alert_ids)
 
-with tab5:
+with tab4:
     df_current = df_processed_tdl if current_park == "TDL" else df_processed_tds
     display_facility_table(df_current)
