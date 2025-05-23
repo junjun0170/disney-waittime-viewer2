@@ -298,5 +298,5 @@ with tab4:
     display_alert_tab(df_alert_source, status_alert_ids=status_alert_ids)
 
 with tab5:
-    df_all = pd.concat([df_processed_tds, df_processed_tdl], ignore_index=True)
-    display_facility_table(df_all)
+    df_current = df_processed_tdl if current_park == "TDL" else df_processed_tds
+    display_facility_table(df_current)
