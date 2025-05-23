@@ -179,6 +179,7 @@ def display_tab(df_processed, df_log, park_label, today_str):
         drop = row.get("drop_rate")
         updated = row["fetched_at"].strftime('%H:%M')
         drop_txt = f"（{drop:.1f}%減少）" if drop is not None else ""
+        st.markdown(f"<a name='{fid}'></a>", unsafe_allow_html=True)
         with st.expander(f"{wait}分：{name}{drop_txt}", expanded=False):
             st.markdown(f"""
                 <small><b>施設名:</b> {row.get('facilitykananame', 'N/A')}<br>
@@ -206,8 +207,8 @@ def display_tab(df_processed, df_log, park_label, today_str):
                     "更新時間": df_recent["fetched_at"].dt.strftime("%H:%M")
                 }).sort_values("更新時間", ascending=False)
 
-        st.markdown("#### ⏱ 直近5回分の情報")
-        st.dataframe(df_recent_display, use_container_width=True)
+            st.markdown("#### ⏱ 直近5回分の情報")
+            st.dataframe(df_recent_display, use_container_width=True)
                   
 # --- 発券状況まとめ ---
 def display_pass_summary(df_tds, df_tdl):
@@ -264,7 +265,8 @@ def display_alert_tab(df_all, status_alert_ids=None):
             else:
                 label = f"状態: {status}"
 
-            st.markdown(f"- ({park}) {name}：{label}（{updated_str}更新）")
+            # 🔗 ページ内リンク付きの表示
+            st.markdown(f"- ({park}) [▶ {name}](#{fid})：{label}（{updated_str}更新）", unsafe_allow_html=True)
 
     else:
         st.info("現在、運営状態による注目施設はありません。")
