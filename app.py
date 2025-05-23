@@ -197,6 +197,17 @@ def display_tab(df_processed, df_log, park_label, today_str):
                 buf, _ = draw_wait_time_chart(expanded_df)
                 if buf: st.image(buf)
                 else: st.info("グラフデータがありません。")
+            # 直近5回のテーブル
+            df_recent = df_log[df_log["facilityid"] == fid].sort_values("fetched_at").tail(5)
+            if not df_recent.empty:
+                df_recent_display = pd.DataFrame({
+                    "待ち時間（分）": df_recent["standbytime"],
+                    "運営状況": df_recent["operatingstatus"],
+                    "更新時間": df_recent["fetched_at"].dt.strftime("%H:%M")
+                }).sort_values("更新時間", ascending=False)
+
+        st.markdown("#### ⏱ 直近5回分の情報")
+        st.dataframe(df_recent_display, use_container_width=True)
                   
 # --- 発券状況まとめ ---
 def display_pass_summary(df_tds, df_tdl):
