@@ -14,9 +14,15 @@ st.set_page_config(page_title="待ち時間グラフ", layout="centered")
 
 from streamlit_autorefresh import st_autorefresh
 
+col1, col2 = st.columns(2)
 # 自動更新（5分）トグル
-if st.toggle("🔁 自動更新（5分ごと）", key="autorefresh_toggle"):
-    st_autorefresh(interval=300_000, key="auto_refresh")
+with col1:
+    if st.toggle("🔁 自動更新（5分ごと）", key="autorefresh_toggle"):
+        st_autorefresh(interval=300_000, key="auto_refresh")
+# TDS⇔TDL切り替えトグル
+with col2:
+    park_toggle = st.toggle("🎡 TDLに切り替え", key="tdl_toggle")
+    current_park = "TDL" if park_toggle else "TDS"
 
 # --- Supabase設定 ---
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -223,23 +229,23 @@ def display_alert_tab(df_all, status_alert_ids=None):
         for _, row in alert_df.sort_values("drop_rate", ascending=False).iterrows():
             st.markdown(f"- ({row['park']}) {row['shortname']}：{row['standbytime']}分（{row['drop_rate']:.1f}%減少）")
 
-    # --- 運営状態変化アラート（オプション） ---
+    # --- 運営状態による注目施設表示 ---
+    st.markdown("### 🔧 運営状態による注目施設")
+
     if status_alert_ids:
-        st.markdown("### 🔧 運営状態による注目施設")
         status_df = df_all[df_all["facilityid"].isin(status_alert_ids)]
+
         for _, row in status_df.iterrows():
             name = row["shortname"]
             park = row["park"]
             status = row["operatingstatus"]
             updated = row.get("updatetime", row["fetched_at"])
             updated_str = updated.strftime("%H:%M") if pd.notnull(updated) else "不明"
-            if status == "運営中":
-                label = "運営再開"
-            elif status == "一時運営中止":
-                label = "一時運営中止中"
-            else:
-                label = f"状態: {status}"
+
+            label = "運営再開" if status == "運営中" else "一時運営中止中" if status == "一時運営中止" else f"状態: {status}"
             st.markdown(f"- ({park}) {name}：{label}（{updated_str}更新）")
+    else:
+        st.info("現在、運営状態による注目施設はありません。")
 
 # --- 一覧表示 ---
 def display_facility_table(df_all):
@@ -269,11 +275,16 @@ with tab2:
     display_tab(df_processed_tdl, df_log_tdl, "TDL", today_str)
 
 with tab3:
-    display_pass_summary(df_processed_tds, df_processed_tdl)
+    if current_park == "TDS":
+        display_pass_summary(df_processed_tds, pd.DataFrame())
+    else:
+        display_pass_summary(pd.DataFrame(), df_processed_tdl)
 
 with tab4:
-    df_alert_source = pd.concat([df_processed_tds, df_processed_tdl], ignore_index=True)
-    display_alert_tab(df_alert_source)
+    df_alert_source = df_processed_tdl if current_park == "TDL" else df_processed_tds
+    df_log_alert = df_log_tdl if current_park == "TDL" else df_log_tds
+    status_alert_ids = detect_status_change_facilities(df_log_alert)
+    display_alert_tab(df_alert_source, status_alert_ids=status_alert_ids)
 
 with tab5:
     df_all = pd.concat([df_processed_tds, df_processed_tdl], ignore_index=True)
