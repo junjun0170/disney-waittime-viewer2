@@ -8,10 +8,11 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
 import io
-from streamlit_autorefresh import st_autorefresh
 
 # --- 設定とヘッダー ---
 st.set_page_config(page_title="待ち時間グラフ", layout="centered")
+
+from streamlit_autorefresh import st_autorefresh
 
 # 自動更新（5分）トグル
 if st.toggle("🔁 自動更新（5分ごと）", key="autorefresh_toggle"):
