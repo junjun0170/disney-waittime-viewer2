@@ -239,11 +239,22 @@ def display_alert_tab(df_all, status_alert_ids=None):
             name = row["shortname"]
             park = row["park"]
             status = row["operatingstatus"]
-            updated = row.get("updatetime", row["fetched_at"])
-            updated_str = updated.strftime("%H:%M") if pd.notnull(updated) else "不明"
+            updated = row.get("updatetime", row.get("fetched_at"))
 
-            label = "運営再開" if status == "運営中" else "一時運営中止中" if status == "一時運営中止" else f"状態: {status}"
+            if isinstance(updated, (pd.Timestamp, datetime)):
+                updated_str = updated.strftime("%H:%M")
+            else:
+                updated_str = "不明"
+
+            if status == "運営中":
+                label = "運営再開"
+            elif status == "一時運営中止":
+                label = "一時運営中止中"
+            else:
+                label = f"状態: {status}"
+
             st.markdown(f"- ({park}) {name}：{label}（{updated_str}更新）")
+
     else:
         st.info("現在、運営状態による注目施設はありません。")
 
