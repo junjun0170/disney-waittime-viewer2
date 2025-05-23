@@ -65,7 +65,12 @@ def preprocess_logs(df_log, shortname_df, park_name):
         else:
             start = df_hour.iloc[0]["standbytime"]
             end = df_hour.iloc[-1]["standbytime"]
-            rate = ((start - end) / start) * 100 if start else None
+            if start and end != 0:
+                rate = ((start - end) / start) * 100
+            elif end == 0:
+                rate = 0
+            else:
+                rate = None
             drop_rates.append(rate)
     df_latest["drop_rate"] = drop_rates
     df_latest["park"] = park_name
@@ -102,8 +107,16 @@ def draw_wait_time_chart(expanded_df):
     df_hour = expanded_df[(expanded_df["fetched_at"] >= one_hour_ago) & (expanded_df["fetched_at"] <= now)]
     drop_rate = None
     if not df_hour.empty and len(df_hour) >= 2:
-        start, end = df_hour.iloc[0]["standbytime"], df_hour.iloc[-1]["standbytime"]
-        drop_rate = ((start - end) / start) * 100 if start else None
+        start_value = df_hour.iloc[0]["standbytime"]
+        end_value = df_hour.iloc[-1]["standbytime"]
+        if start_value and end_value != 0:
+            drop_rate = ((start_value - end_value) / start_value) * 100
+        elif end_value == 0:
+            drop_rate = 0
+        else:
+            drop_rate = None
+    else:
+        drop_rate = None
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(expanded_df["fetched_at"], expanded_df["standbytime"], linestyle="-")
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
@@ -121,6 +134,32 @@ def draw_wait_time_chart(expanded_df):
     buf.seek(0)
     plt.close(fig)
     return buf, drop_rate
+
+# --- 運営状況確認 ---
+@st.cache_data(ttl=300)
+def detect_status_change_facilities(df_log: pd.DataFrame) -> list[str]:
+
+    facility_ids = []
+
+    for fid, group in df_log.groupby("facilityid"):
+        status_list = group.sort_values("fetched_at")["operatingstatus"].tail(5).tolist()
+
+        if len(status_list) < 2:
+            continue
+
+        # 運営中が連続していたら除外
+        if status_list[-1] == "運営中" and status_list[-2] == "運営中":
+            continue
+
+        # 直前まで「一時運営中止」→「運営中」になった瞬間
+        if status_list[-1] == "運営中" and "一時運営中止" in status_list[-3:-1]:
+            facility_ids.append(fid)
+
+        # 「一時運営中止」が続いている
+        elif all(s == "一時運営中止" for s in status_list[-3:]):
+            facility_ids.append(fid)
+
+    return facility_ids
 
 # --- TDS/TDL 表示 ---
 def display_tab(df_processed, df_log, park_label, today_str):
@@ -173,14 +212,34 @@ def display_pass_summary(df_tds, df_tdl):
     render_section("🚫 ラインカット中", linecut_list)
 
 # --- 注目施設表示 ---
-def display_alert_tab(df_all):
+def display_alert_tab(df_all, status_alert_ids=None):
+    st.markdown("### 🔔 狙い目施設（減少率・待ち時間条件）")
+
     alert_df = df_all[(df_all["standbytime"] <= 40) & (df_all["drop_rate"].fillna(0) >= 30)].copy()
-    st.markdown("### 🔔 今が狙い目の施設（条件: 待ち時間 ≤ 40分 & 減少率 ≥ 30%）")
+
     if alert_df.empty:
         st.info("現在、条件に合致する施設はありません。")
     else:
         for _, row in alert_df.sort_values("drop_rate", ascending=False).iterrows():
             st.markdown(f"- ({row['park']}) {row['shortname']}：{row['standbytime']}分（{row['drop_rate']:.1f}%減少）")
+
+    # --- 運営状態変化アラート（オプション） ---
+    if status_alert_ids:
+        st.markdown("### 🔧 運営状態による注目施設")
+        status_df = df_all[df_all["facilityid"].isin(status_alert_ids)]
+        for _, row in status_df.iterrows():
+            name = row["shortname"]
+            park = row["park"]
+            status = row["operatingstatus"]
+            updated = row.get("updatetime", row["fetched_at"])
+            updated_str = updated.strftime("%H:%M") if pd.notnull(updated) else "不明"
+            if status == "運営中":
+                label = "運営再開"
+            elif status == "一時運営中止":
+                label = "一時運営中止中"
+            else:
+                label = f"状態: {status}"
+            st.markdown(f"- ({park}) {name}：{label}（{updated_str}更新）")
 
 # --- 一覧表示 ---
 def display_facility_table(df_all):
